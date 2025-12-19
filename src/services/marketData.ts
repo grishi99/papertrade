@@ -50,10 +50,28 @@ class MarketDataService {
 
     private formatSymbol(symbol: string): string {
         let clean = symbol.trim().toUpperCase();
-        if (!clean.includes('.') && clean.length > 0) {
-            return `${clean}.NS`;
+        // Alpha Vantage uses NSE: or BSE: prefix for Indian stocks
+        if (clean.includes('.NS')) {
+            return `NSE:${clean.replace('.NS', '')}`;
+        }
+        if (clean.includes('.BO')) {
+            return `BSE:${clean.replace('.BO', '')}`;
+        }
+        if (!clean.includes(':') && !clean.includes('.') && clean.length > 0) {
+            return `NSE:${clean}`;
         }
         return clean;
+    }
+
+    // For display purposes, convert back to readable format
+    private toDisplaySymbol(alphaSymbol: string): string {
+        if (alphaSymbol.startsWith('NSE:')) {
+            return alphaSymbol.replace('NSE:', '') + '.NS';
+        }
+        if (alphaSymbol.startsWith('BSE:')) {
+            return alphaSymbol.replace('BSE:', '') + '.BO';
+        }
+        return alphaSymbol;
     }
 
     public async getLatestPrice(symbol: string): Promise<PriceData> {
@@ -75,7 +93,7 @@ class MarketDataService {
             if (!quote || !quote['05. price']) throw new Error('No data found for this symbol');
 
             const result: PriceData = {
-                symbol: formatted,
+                symbol: this.toDisplaySymbol(formatted),
                 price: parseFloat(quote['05. price']),
                 change: parseFloat(quote['09. change']),
                 changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
@@ -126,7 +144,9 @@ class MarketDataService {
     }
 
     public getFormattedSymbol(symbol: string) {
-        return this.formatSymbol(symbol);
+        // Return display-friendly symbol (e.g., RELIANCE.NS) for UI
+        const formatted = this.formatSymbol(symbol);
+        return this.toDisplaySymbol(formatted);
     }
 
     public async searchSymbols(keywords: string): Promise<SymbolSearch[]> {
