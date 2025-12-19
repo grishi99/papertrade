@@ -5,13 +5,15 @@ import { marketData, CandleData } from '../services/marketData';
 interface TradingViewChartProps {
     symbol: string;
     interval?: string;
+    onError?: (msg: string) => void;
 }
 
-export const TradingViewChart = ({ symbol, interval = '1D' }: TradingViewChartProps) => {
+export const TradingViewChart = ({ symbol, interval = '5min', onError }: TradingViewChartProps) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -50,10 +52,18 @@ export const TradingViewChart = ({ symbol, interval = '1D' }: TradingViewChartPr
 
         const loadData = async () => {
             setLoading(true);
-            const data = await marketData.getHistoricalData(symbol, interval);
-            candlestickSeries.setData(data as any);
-            chart.timeScale().fitContent();
-            setLoading(false);
+            setError(null);
+            try {
+                const data = await marketData.getHistoricalData(symbol, interval);
+                candlestickSeries.setData(data as any);
+                chart.timeScale().fitContent();
+            } catch (err: any) {
+                const msg = err.message || 'Failed to load chart';
+                setError(msg);
+                if (onError) onError(msg);
+            } finally {
+                setLoading(false);
+            }
         };
 
         loadData();
@@ -68,13 +78,29 @@ export const TradingViewChart = ({ symbol, interval = '1D' }: TradingViewChartPr
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
-    }, [symbol, interval]);
+    }, [symbol, interval, onError]);
 
     return (
         <div className="relative w-full h-full">
             {loading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/50 backdrop-blur-sm">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4"></div>
+                    <p className="text-xs font-black uppercase tracking-widest text-neutral-500">Loading Chart Data...</p>
+                </div>
+            )}
+            {error && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md p-8 text-center">
+                    <div className="bg-red-500/20 p-4 rounded-full mb-4">
+                        <div className="text-red-500 font-bold text-xl">!</div>
+                    </div>
+                    <h3 className="text-white font-bold mb-2">Service Alert</h3>
+                    <p className="text-neutral-500 text-xs mb-6 max-w-xs">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="text-[10px] font-black uppercase tracking-widest text-primary border-b border-primary"
+                    >
+                        Retry Connection
+                    </button>
                 </div>
             )}
             <div ref={chartContainerRef} className="w-full h-full" />

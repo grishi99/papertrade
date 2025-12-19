@@ -1,7 +1,3 @@
-import { createClient } from '@supabase/supabase-js'
-
-// Market Data Utility using Yahoo Finance (unofficial) or Alpha Vantage
-// For this demo, we will use a mixed approach or mock data if API keys are missing.
 
 export interface PriceData {
     symbol: string;
@@ -20,9 +16,19 @@ export interface CandleData {
     volume?: number;
 }
 
+interface CacheItem<T> {
+    data: T;
+    timestamp: number;
+}
+
 class MarketDataService {
     private static instance: MarketDataService;
-    private cache: Map<string, PriceData> = new Map();
+    private apikey = import.meta.env.VITE_ALPHA_API_KEY;
+    private baseUrl = 'https://www.alphavantage.co/query';
+
+    private quoteCache: Map<string, CacheItem<PriceData>> = new Map();
+    private chartCache: Map<string, CacheItem<CandleData[]>> = new Map();
+    private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     private constructor() { }
 
@@ -33,48 +39,85 @@ class MarketDataService {
         return MarketDataService.instance;
     }
 
-    // NSE symbols usually end with .NS, BSE with .BO
-    public async getLatestPrice(symbol: string): Promise<PriceData> {
-        // In a real app, this would call Alpha Vantage or a proxy to Yahoo Finance
-        // For the blueprint demo, we'll simulate real-time movement if it's in our "active" list
-
-        // Mocking for now to ensure UI works immediately
-        const basePrice = symbol.includes('.NS') ? 2200 + Math.random() * 100 : 150 + Math.random() * 50;
-        const change = (Math.random() - 0.5) * 10;
-
-        return {
-            symbol,
-            price: basePrice,
-            change: change,
-            changePercent: (change / basePrice) * 100,
-            lastUpdated: new Date().toISOString()
-        };
+    private formatSymbol(symbol: string): string {
+        let clean = symbol.trim().toUpperCase();
+        if (!clean.includes('.') && clean.length > 0) {
+            return `${clean}.NS`;
+        }
+        return clean;
     }
 
-    public async getHistoricalData(symbol: string, interval: string = '1D'): Promise<CandleData[]> {
-        // Simulation of historical data for the chart
-        const data: CandleData[] = [];
-        let prevClose = symbol.includes('.NS') ? 2150 : 145;
-        const now = Math.floor(Date.now() / 1000);
-        const dayInSecs = 24 * 60 * 60;
+    public async getLatestPrice(symbol: string): Promise<PriceData> {
+        const formatted = this.formatSymbol(symbol);
+        const cached = this.quoteCache.get(formatted);
 
-        for (let i = 100; i >= 0; i--) {
-            const open = prevClose + (Math.random() - 0.5) * 20;
-            const close = open + (Math.random() - 0.5) * 20;
-            const high = Math.max(open, close) + Math.random() * 10;
-            const low = Math.min(open, close) - Math.random() * 10;
-
-            data.push({
-                time: now - (i * dayInSecs),
-                open,
-                high,
-                low,
-                close,
-                volume: Math.floor(Math.random() * 1000000)
-            });
-            prevClose = close;
+        if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+            return cached.data;
         }
-        return data;
+
+        try {
+            const resp = await fetch(`${this.baseUrl}?function=GLOBAL_QUOTE&symbol=${formatted}&apikey=${this.apikey}`);
+            const data = await resp.json();
+
+            if (data['Error Message']) throw new Error('Symbol not found');
+            if (data['Note']) throw new Error('API rate limit reached');
+
+            const quote = data['Global Quote'];
+            if (!quote || !quote['05. price']) throw new Error('No data found for this symbol');
+
+            const result: PriceData = {
+                symbol: formatted,
+                price: parseFloat(quote['05. price']),
+                change: parseFloat(quote['09. change']),
+                changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+                lastUpdated: quote['07. latest trading day']
+            };
+
+            this.quoteCache.set(formatted, { data: result, timestamp: Date.now() });
+            return result;
+        } catch (error) {
+            console.error('MarketData Extra Error:', error);
+            throw error;
+        }
+    }
+
+    public async getHistoricalData(symbol: string, interval: string = '5min'): Promise<CandleData[]> {
+        const formatted = this.formatSymbol(symbol);
+        const cacheKey = `${formatted}_${interval}`;
+        const cached = this.chartCache.get(cacheKey);
+
+        if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+            return cached.data;
+        }
+
+        try {
+            const resp = await fetch(`${this.baseUrl}?function=TIME_SERIES_INTRADAY&symbol=${formatted}&interval=${interval}&apikey=${this.apikey}&outputsize=compact`);
+            const data = await resp.json();
+
+            if (data['Note']) throw new Error('API rate limit reached');
+
+            const timeSeries = data[`Time Series (${interval})`];
+            if (!timeSeries) throw new Error('No chart data found for this symbol');
+
+            const result: CandleData[] = Object.entries(timeSeries).map(([time, vals]: [string, any]) => ({
+                time: Math.floor(new Date(time).getTime() / 1000),
+                open: parseFloat(vals['1. open']),
+                high: parseFloat(vals['2. high']),
+                low: parseFloat(vals['3. low']),
+                close: parseFloat(vals['4. close']),
+                volume: parseInt(vals['5. volume'])
+            })).sort((a, b) => (a.time as number) - (b.time as number));
+
+            this.chartCache.set(cacheKey, { data: result, timestamp: Date.now() });
+            return result;
+        } catch (error) {
+            console.error('Chart Data Error:', error);
+            throw error;
+        }
+    }
+
+    public getFormattedSymbol(symbol: string) {
+        return this.formatSymbol(symbol);
     }
 }
 
