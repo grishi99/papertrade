@@ -71,8 +71,10 @@ app.get('/api/stock/:symbol', async (req, res) => {
 
         // Fetch real-time quote
         const quote = await yahooFinance.quote(symbol);
+        console.log(`[DEBUG] Quote for ${symbol}:`, JSON.stringify(quote, null, 2));
 
         if (!quote || !quote.regularMarketPrice) {
+            console.warn(`[WARN] No regularMarketPrice found for ${symbol}`);
             return res.status(404).json({
                 error: true,
                 message: `No data found for symbol: ${symbol}. Try RELIANCE.NS, HDFCBANK.NS, or SBIN.NS.`
@@ -151,8 +153,9 @@ app.get('/api/search/:query', async (req, res) => {
 
         const results = await yahooFinance.search(query, { quotesCount: 10 });
 
+        // Filter for Indian markets (NSE/BSE) or no suffix (often defaulting to US but here we want Indian)
         const suggestions = (results.quotes || [])
-            .filter(q => q.symbol && (q.symbol.endsWith('.NS') || q.symbol.endsWith('.BO') || !q.symbol.includes('.')))
+            .filter(q => q.symbol && (q.symbol.endsWith('.NS') || q.symbol.endsWith('.BO')))
             .map(q => ({
                 symbol: q.symbol,
                 name: q.shortname || q.longname || q.symbol,
@@ -182,4 +185,13 @@ app.listen(PORT, () => {
     console.log(`\n🚀 PaperTrade Server running at http://localhost:${PORT}`);
     console.log(`📈 Example: http://localhost:${PORT}/api/stock/RELIANCE.NS`);
     console.log(`🔍 Search: http://localhost:${PORT}/api/search/tata\n`);
+
+    // Suppress the maintenance warning from yahoo-finance2
+    const originalEmit = process.emit;
+    process.emit = function (name, data, ...args) {
+        if (name === `warning` && typeof data === `object` && data.name === `DeprecationWarning` && data.message.includes(`yahoo-finance2`)) {
+            return false;
+        }
+        return originalEmit.apply(process, [name, data, ...args]);
+    };
 });
