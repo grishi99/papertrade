@@ -4,22 +4,21 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    darkMode: 'class',
     theme: {
         extend: {
             colors: {
-                background: "#0a0a0a",
-                foreground: "#ededed",
+                background: 'hsl(var(--background))',
+                foreground: 'hsl(var(--foreground))',
                 primary: {
-                    DEFAULT: "#3b82f6",
-                    foreground: "#ffffff",
+                    DEFAULT: '#3b82f6',
+                    foreground: '#ffffff',
                 },
                 secondary: {
-                    DEFAULT: "#1e293b",
-                    foreground: "#ffffff",
+                    DEFAULT: 'hsl(var(--secondary))',
+                    foreground: 'hsl(var(--secondary-foreground))',
                 },
                 card: {
-                    DEFAULT: "#171717",
-                    foreground: "#ededed",
                 },
                 border: "#262626",
             },

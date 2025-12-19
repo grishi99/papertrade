@@ -16,6 +16,14 @@ export interface CandleData {
     volume?: number;
 }
 
+export interface SymbolSearch {
+    symbol: string;
+    name: string;
+    type: string;
+    region: string;
+    matchScore: string;
+}
+
 interface CacheItem<T> {
     data: T;
     timestamp: number;
@@ -28,6 +36,7 @@ class MarketDataService {
 
     private quoteCache: Map<string, CacheItem<PriceData>> = new Map();
     private chartCache: Map<string, CacheItem<CandleData[]>> = new Map();
+    private searchCache: Map<string, CacheItem<SymbolSearch[]>> = new Map();
     private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     private constructor() { }
@@ -118,6 +127,40 @@ class MarketDataService {
 
     public getFormattedSymbol(symbol: string) {
         return this.formatSymbol(symbol);
+    }
+
+    public async searchSymbols(keywords: string): Promise<SymbolSearch[]> {
+        if (!keywords || keywords.length < 2) return [];
+
+        const cached = this.searchCache.get(keywords);
+        if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+            return cached.data;
+        }
+
+        try {
+            const resp = await fetch(`${this.baseUrl}?function=SYMBOL_SEARCH&keywords=${keywords}&apikey=${this.apikey}`);
+            const data = await resp.json();
+
+            if (data['Note']) throw new Error('API rate limit reached');
+
+            const bestMatches = data['bestMatches'];
+            if (!bestMatches) return [];
+
+            const result: SymbolSearch[] = bestMatches.map((item: any) => ({
+                symbol: item['1. symbol'],
+                name: item['2. name'],
+                type: item['3. type'],
+                region: item['4. region'],
+                matchScore: item['9. matchScore']
+            }));
+
+            // Filter for NSE/BSE and specific Indian stocks if needed, or return all
+            this.searchCache.set(keywords, { data: result, timestamp: Date.now() });
+            return result;
+        } catch (error) {
+            console.error('Symbol Search Error:', error);
+            return [];
+        }
     }
 }
 

@@ -6,9 +6,10 @@ interface TradingViewChartProps {
     symbol: string;
     interval?: string;
     onError?: (msg: string) => void;
+    isDarkMode?: boolean;
 }
 
-export const TradingViewChart = ({ symbol, interval = '5min', onError }: TradingViewChartProps) => {
+export const TradingViewChart = ({ symbol, interval = '5min', onError, isDarkMode = true }: TradingViewChartProps) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -20,22 +21,22 @@ export const TradingViewChart = ({ symbol, interval = '5min', onError }: Trading
 
         const chart = createChart(chartContainerRef.current, {
             layout: {
-                background: { type: ColorType.Solid, color: '#171717' },
-                textColor: '#d1d5db',
+                background: { type: ColorType.Solid, color: isDarkMode ? '#0a0a0a' : '#ffffff' },
+                textColor: isDarkMode ? '#d1d5db' : '#374151',
             },
             grid: {
-                vertLines: { color: '#262626' },
-                horzLines: { color: '#262626' },
+                vertLines: { color: isDarkMode ? '#171717' : '#f3f4f6' },
+                horzLines: { color: isDarkMode ? '#171717' : '#f3f4f6' },
             },
             width: chartContainerRef.current.clientWidth,
             height: 500,
             timeScale: {
-                borderColor: '#262626',
+                borderColor: isDarkMode ? '#171717' : '#e5e7eb',
                 timeVisible: true,
                 secondsVisible: false,
             },
             rightPriceScale: {
-                borderColor: '#262626',
+                borderColor: isDarkMode ? '#171717' : '#e5e7eb',
             },
         });
 
@@ -78,7 +79,7 @@ export const TradingViewChart = ({ symbol, interval = '5min', onError }: Trading
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
-    }, [symbol, interval, onError]);
+    }, [symbol, interval, onError, isDarkMode]);
 
     return (
         <div className="relative w-full h-full">
@@ -93,7 +94,7 @@ export const TradingViewChart = ({ symbol, interval = '5min', onError }: Trading
                     <div className="bg-red-500/20 p-4 rounded-full mb-4">
                         <div className="text-red-500 font-bold text-xl">!</div>
                     </div>
-                    <h3 className="text-white font-bold mb-2">Service Alert</h3>
+                    <h3 className="text-foreground font-bold mb-2">Service Alert</h3>
                     <p className="text-neutral-500 text-xs mb-6 max-w-xs">{error}</p>
                     <button
                         onClick={() => window.location.reload()}
