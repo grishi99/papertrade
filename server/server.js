@@ -56,38 +56,54 @@ function formatSymbol(symbol) {
 
 // ============================================
 // GET /api/stock/:symbol
+// Query Params: ?interval=5m&range=1d
 // Returns: quote data, historical candlesticks
 // ============================================
 app.get('/api/stock/:symbol', async (req, res) => {
     try {
         const symbol = formatSymbol(req.params.symbol);
-        console.log(`[REQUEST] Fetching data for: ${symbol}`);
+        const interval = req.query.interval || '5m';
+        const range = req.query.range || '1d';
 
-        // Check cache first
-        const cachedData = getFromCache(symbol);
+        // Validate allowed intervals to prevent abuse
+        const allowedIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'];
+        if (!allowedIntervals.includes(interval)) {
+            return res.status(400).json({ error: true, message: `Invalid interval: ${interval}` });
+        }
+
+        console.log(`[REQUEST] Fetching data for: ${symbol} (Int: ${interval}, Range: ${range})`);
+
+        // Cache key includes interval and range
+        const cacheKey = `${symbol}_${interval}_${range}`;
+        const cachedData = getFromCache(cacheKey);
         if (cachedData) {
             return res.json(cachedData);
         }
 
         // Fetch real-time quote
         const quote = await yahooFinance.quote(symbol);
-        console.log(`[DEBUG] Quote for ${symbol}:`, JSON.stringify(quote, null, 2));
 
         if (!quote || !quote.regularMarketPrice) {
             console.warn(`[WARN] No regularMarketPrice found for ${symbol}`);
             return res.status(404).json({
                 error: true,
-                message: `No data found for symbol: ${symbol}. Try RELIANCE.NS, HDFCBANK.NS, or SBIN.NS.`
+                message: `No data found for symbol: ${symbol}.`
             });
         }
 
-        // Fetch historical data for candlestick chart (last 7 days, 5-min interval)
+        // Fetch historical data with dynamic options
         let chartData = [];
         try {
+            const queryOptions = { period1: range, interval: interval };
+            // yahoo-finance2 chart() uses 'period1' as 'range' if string (e.g. '1d', '5d', '1y')
+            // but actually strictly it's queryOptions: { range: '1d', interval: '5m' } for convenience wrappers
+            // or using period1/period2. Let's use the 'validation' safe way:
+            // If range is a validity string like '1d','5d','1mo','3mo','6mo','1y','5y','10y','ytd','max'
+            // we can pass proper queryOptions.
+
             const historical = await yahooFinance.chart(symbol, {
-                period1: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-                period2: new Date(),
-                interval: '5m',
+                range: range,
+                interval: interval,
             });
 
             if (historical && historical.quotes) {
@@ -104,7 +120,6 @@ app.get('/api/stock/:symbol', async (req, res) => {
             }
         } catch (chartError) {
             console.warn(`[WARN] Chart data not available for ${symbol}:`, chartError.message);
-            // Continue without chart data
         }
 
         // Build response
@@ -124,7 +139,7 @@ app.get('/api/stock/:symbol', async (req, res) => {
         };
 
         // Cache the response
-        setCache(symbol, response);
+        setCache(cacheKey, response);
 
         console.log(`[SUCCESS] Returned data for ${symbol}: ₹${response.price}`);
         res.json(response);

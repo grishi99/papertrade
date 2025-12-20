@@ -5,11 +5,12 @@ import { marketData, CandleData } from '../services/marketData';
 interface TradingViewChartProps {
     symbol: string;
     interval?: string;
+    range?: string;
     onError?: (msg: string) => void;
     isDarkMode?: boolean;
 }
 
-export const TradingViewChart = ({ symbol, interval = '5min', onError, isDarkMode = true }: TradingViewChartProps) => {
+export const TradingViewChart = ({ symbol, interval = '5m', range = '1d', onError, isDarkMode = true }: TradingViewChartProps) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -55,7 +56,7 @@ export const TradingViewChart = ({ symbol, interval = '5min', onError, isDarkMod
             setLoading(true);
             setError(null);
             try {
-                const data = await marketData.getHistoricalData(symbol, interval);
+                const data = await marketData.getHistoricalData(symbol, interval, range);
                 candlestickSeries.setData(data as any);
                 chart.timeScale().fitContent();
             } catch (err: any) {
@@ -79,7 +80,7 @@ export const TradingViewChart = ({ symbol, interval = '5min', onError, isDarkMod
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
-    }, [symbol, interval, onError, isDarkMode]);
+    }, [symbol, interval, range, onError, isDarkMode]);
 
     return (
         <div className="relative w-full h-full">

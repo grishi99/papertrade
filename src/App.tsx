@@ -28,6 +28,10 @@ function App() {
     // Theme
     const [isDarkMode, setIsDarkMode] = useState(true)
 
+    // Chart State
+    const [chartInterval, setChartInterval] = useState('5m')
+    const [chartRange, setChartRange] = useState('1d')
+
     // App State
     const [isPriceLoading, setIsPriceLoading] = useState(false)
     const [priceError, setPriceError] = useState<string | null>(null)
@@ -214,7 +218,7 @@ function App() {
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className="font-bold text-sm text-primary">{s.symbol}</span>
-                                                    <span className="text-[10px] uppercase font-black text-neutral-500">{s.region}</span>
+                                                    <span className="text-[10px] uppercase font-black text-neutral-500">{s.exchange || 'NSE'}</span>
                                                 </div>
                                                 <span className="text-xs text-neutral-400 truncate">{s.name}</span>
                                             </button>
@@ -276,20 +280,41 @@ function App() {
                                             </>
                                         )}
                                     </div>
-                                    <div className="flex bg-secondary p-1 rounded-xl border border-border">
-                                        {['1m', '5m', '15m', '1h', '1D', '1W'].map(tf => (
-                                            <button key={tf} className={cn(
-                                                "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-                                                tf === '5m' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-neutral-500 hover:text-foreground"
-                                            )}>
-                                                {tf}
+                                    <div className="flex bg-secondary p-1 rounded-xl border border-border space-x-1">
+                                        {[
+                                            { label: '1D', t: '5m', r: '1d' },
+                                            { label: '5D', t: '15m', r: '5d' },
+                                            { label: '1W', t: '30m', r: '1wk' },
+                                            { label: '1M', t: '1h', r: '1mo' },
+                                            { label: '6M', t: '1d', r: '6mo' },
+                                            { label: '1Y', t: '1d', r: '1y' },
+                                            { label: '5Y', t: '1wk', r: '5y' },
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.label}
+                                                onClick={() => {
+                                                    setChartInterval(opt.t)
+                                                    setChartRange(opt.r)
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-[10px] font-black transition-all",
+                                                    chartRange === opt.r ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-neutral-500 hover:text-foreground"
+                                                )}>
+                                                {opt.label}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
                                 <div className="bg-card rounded-3xl border border-border h-[550px] overflow-hidden shadow-2xl relative">
-                                    <TradingViewChart key={selectedSymbol} symbol={selectedSymbol} interval="5min" onError={setPriceError} isDarkMode={isDarkMode} />
+                                    <TradingViewChart
+                                        key={`${selectedSymbol}-${chartInterval}-${chartRange}`}
+                                        symbol={selectedSymbol}
+                                        interval={chartInterval}
+                                        range={chartRange}
+                                        onError={setPriceError}
+                                        isDarkMode={isDarkMode}
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -300,7 +325,7 @@ function App() {
                                                 { label: 'Last Update', val: priceInfo?.lastUpdated || '...' },
                                                 { label: 'Price', val: `₹${priceInfo?.price.toFixed(2) || '...'}`, color: 'text-primary' },
                                                 { label: 'Net Change', val: `₹${priceInfo?.change.toFixed(2) || '...'}`, color: 'text-red-500' },
-                                                { label: 'Interval', val: '5 MIN' },
+                                                { label: 'Interval', val: chartInterval.toUpperCase() },
                                             ].map((item, i) => (
                                                 <div key={i}>
                                                     <div className="text-[10px] text-neutral-500 uppercase font-black mb-1">{item.label}</div>

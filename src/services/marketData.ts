@@ -26,6 +26,7 @@ export interface SymbolSearch {
     name: string;
     exchange?: string;
     type?: string;
+    region?: string;
 }
 
 const API_BASE = 'http://localhost:3001/api';
@@ -83,11 +84,11 @@ class MarketDataService {
         }
     }
 
-    public async getHistoricalData(symbol: string, interval: string = '5m'): Promise<CandleData[]> {
+    public async getHistoricalData(symbol: string, interval: string = '5m', range: string = '1d'): Promise<CandleData[]> {
         const formatted = this.formatSymbol(symbol);
 
         try {
-            const resp = await fetch(`${API_BASE}/stock/${formatted}`);
+            const resp = await fetch(`${API_BASE}/stock/${formatted}?interval=${interval}&range=${range}`);
             const data = await resp.json();
 
             if (data.error) {
